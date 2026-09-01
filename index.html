@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grafik zmian — systemy 4-ro Brygadowy i 3-zmianowy</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#12263a">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Grafik zmian">
+
+<style>
+/* ============================================================
+   PLIK: index.html — Grafik zmian (system 3- i 4-zmianowy)
+   ============================================================
+   Struktura pliku (dla ułatwienia edycji):
+
+   1. <style>  — wygląd. Zmienne kolorów (--navy, --line, --shift-W,
+      --highlight itd.) na samej górze — zmiana koloru w jednym
+      miejscu zmienia go wszędzie. Sekcja "@media print" na końcu
+      odpowiada WYŁĄCZNIE za wygląd wydruku 3 miesięcy (inny układ
+      niż widok na ekranie).
+
+   2. <header>/<div class="toolbar">/<div class="settings"> (HTML)
+      — pasek tytułu, zakładki systemu, nawigacja miesiąca,
+      panel ustawień (punkty odniesienia, nazwy brygad, własna
+      brygada do podświetlenia).
+
+   3. <div id="mainTableWrap"> — tabela widoczna na ekranie.
+      <div id="printArea"> — puste na starcie, wypełniane dynamicznie
+      tylko na czas drukowania (funkcja printThreeMonths).
+
+   4. <script> — logika, patrz opisy przy poszczególnych funkcjach
+      poniżej.
+   ============================================================ */
+
+  :root{
+    --navy:#12263a;
+    --navy-2:#1c3a56;
+    --paper:#f5f7f9;
+    --line:#d3dbe1;         /* linie UI (paski, legenda) */
+    --line-day:#000000;     /* linie poziome między dniami w tabeli */
+    --line-strong:#5c6b76;  /* linie pionowe / separatory */
+    --ink:#1b2833;
+    --muted:#6b7a87;
+    --shift-W:#4caf6e;
+    --shift-W-bg:#dff5e5;
+    --today:#c0392b;
+    --highlight:#0a84ff;    /* kolor podświetlenia własnej brygady */
+    --today-bg:#f8d7d3;
+    --selected-bg:#ffe08a;  /* kolor wyróżnienia dnia po kliknięciu */
+    --weekend-bg:#eef1f3;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:"Segoe UI", Roboto, -apple-system, sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  header{
+    background:linear-gradient(135deg,var(--navy),var(--navy-2));
+    color:#fff;
+    padding:16px 18px 12px;
+  }
+  header h1{
+    margin:0 0 2px;
+    font-size:1.2rem;
+    letter-spacing:.2px;
+  }
+  header .sub{
+    font-size:.78rem;
+    opacity:.75;
+  }
+  .tabs{
+    display:flex;
+    gap:6px;
+    margin-top:12px;
+  }
+  .tab{
+    flex:1;
+    text-align:center;
+    padding:8px 6px;
+    background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:8px 8px 0 0;
+    cursor:pointer;
+    font-size:.85rem;
+    font-weight:600;
+    color:#dfe7ee;
+    user-select:none;
+  }
+  .tab.active{
+    background:var(--paper);
+    color:var(--navy);
+    border-bottom-color:var(--paper);
+  }
+  .toolbar{
+    background:#fff;
+    border-bottom:1px solid var(--line);
+    padding:9px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  .nav{
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .nav button{
+    background:var(--navy);
+    color:#fff;
+    border:none;
+    width:30px;
+    height:30px;
+    border-radius:7px;
+    font-size:1rem;
+    cursor:pointer;
+  }
+  .nav button:hover{background:var(--navy-2);}
+  .nav .label{
+    font-weight:700;
+    font-size:1rem;
+    min-width:140px;
+    text-align:center;
+    text-transform:capitalize;
+  }
+  .actions{
+    display:flex;
+    gap:6px;
+    align-items:center;
+  }
+  .actions button, .actions .gear{
+    background:#fff;
+    border:1px solid var(--line-strong);
+    color:var(--navy);
+    padding:6px 10px;
+    border-radius:7px;
+    cursor:pointer;
+    font-size:.8rem;
+    font-weight:600;
+  }
+  .actions button:hover{background:#eef2f5;}
+
+  .settings{
+    display:none;
+    background:#fff;
+    border-bottom:1px solid var(--line);
+    padding:12px 14px;
+  }
+  .settings.open{display:block;}
+  .settings-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+    gap:12px;
+    max-width:900px;
+  }
+  .settings label{
+    display:block;
+    font-size:.7rem;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.4px;
+    margin-bottom:4px;
+  }
+  .settings input[type=date], .settings input[type=text]{
+    width:100%;
+    padding:6px 8px;
+    border:1px solid var(--line-strong);
+    border-radius:6px;
+    font-size:.83rem;
+  }
+  .settings .hint{
+    font-size:.73rem;
+    color:var(--muted);
+    margin-top:8px;
+    max-width:700px;
+  }
+
+  .legend{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    padding:8px 14px;
+    font-size:.75rem;
+    color:var(--muted);
+    background:#fff;
+    border-bottom:1px solid var(--line);
+  }
+  .legend span{display:flex;align-items:center;gap:5px;}
+  .swatch{width:11px;height:11px;border-radius:3px;display:inline-block;}
+
+  .table-wrap{padding:12px 14px 36px;overflow-x:auto;}
+  table{
+    border-collapse:collapse;
+    width:100%;
+    max-width:480px;
+    margin:0;
+    background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.06);
+    table-layout:fixed;
+    border:3px solid var(--navy); /* grube obramowanie całej tabeli */
+  }
+  th, td{
+    padding:4px 3px;
+    font-size:.86rem;
+    text-align:center;
+  }
+  /* linie poziome między dniami — wyraźne, ale spokojne */
+  tbody td, tbody th{
+    border-bottom:1.5px solid var(--line-day);
+  }
+  tbody tr:last-child td{
+    border-bottom:none;
+  }
+  /* linie pionowe — mocno widoczne separatory kolumn */
+  th, td{
+    border-right:2px solid var(--line-strong);
+  }
+  th:last-child, td:last-child{
+    border-right:none;
+  }
+  thead th{
+    background:var(--navy);
+    color:#fff;
+    font-weight:700;
+    font-size:1rem;           /* większe oznaczenia brygad w nagłówku */
+    border-bottom:2px solid var(--navy);
+    border-right-color:rgba(255,255,255,.35);
+    padding:7px 3px;
+  }
+  th.date-col, td.date-col{
+    border-right:2.5px solid var(--navy);
+  }
+  th.date-col{text-align:left;padding-left:8px;width:82px;font-size:.88rem;}
+  tbody td.date-col{
+    text-align:left;
+    padding-left:8px;
+    font-weight:600;
+    color:var(--ink);
+    white-space:nowrap;
+    font-size:.82rem;
+  }
+  tbody tr.weekend td.date-col{color:#b23a3a;}
+  tbody tr.weekend{background:var(--weekend-bg);}
+  tbody tr.today td.date-col{font-weight:700;}
+  tbody tr.today td{background:var(--today-bg);}
+  td.shift{font-weight:700;color:#000;}
+  td.I, td.II, td.III{background:#fff;}
+  td.W{background:var(--shift-W-bg);}
+  tbody tr.today td.W{background:var(--today-bg);}
+
+  /* podświetlenie kolumny własnej brygady (ustawiane w Ustawieniach) */
+  th.mine{background:var(--highlight);}
+  td.mine{box-shadow:inset 0 0 0 2px var(--highlight);}
+  tbody tr.today td.mine{box-shadow:inset 0 0 0 2px var(--highlight);}
+
+  /* wyróżnienie dnia po kliknięciu w wiersz */
+  tbody tr{cursor:pointer;}
+  tbody tr.selected td{background:var(--selected-bg) !important;}
+  tbody tr.selected td.date-col{font-weight:700;}
+
+  .brigade-name{
+    font-size:.62rem;
+    font-weight:400;
+    display:block;
+    opacity:.85;
+    margin-top:1px;
+  }
+
+  footer{
+    text-align:center;
+    font-size:.7rem;
+    color:var(--muted);
+    padding:8px 14px 22px;
+  }
+
+  #printArea{display:none;}
+
+  @media print{
+    @page{ size: landscape; margin: 10mm; }
+    header, .toolbar, .settings, .legend, footer, #mainTableWrap{display:none;}
+    body{background:#fff;}
+    #printArea{
+      display:flex;
+      flex-direction:row;
+      gap:14px;
+      align-items:flex-start;
+    }
+    #printArea .print-month{
+      flex:1 1 0;
+      min-width:0;
+      page-break-inside:avoid;
+    }
+    #printArea h2{
+      font-size:.82rem;
+      margin:0 0 6px;
+      text-transform:capitalize;
+      color:var(--navy);
+    }
+    #printArea table{max-width:100%;width:100%;margin:0;table-layout:fixed;}
+    #printArea th, #printArea td{padding:2px 2px;font-size:.66rem;}
+    #printArea th.date-col{width:46px;}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Grafik zmian</h1>
+  <div class="sub">Wybierz swój system pracy oraz oznacz swoją brygadę w USTAWIENIACH</div>
+  <div class="tabs">
+    <div class="tab active" data-system="4" onclick="switchSystem('4')">System 4-ro Brygadowy (Brygady A–D)</div>
+    <div class="tab" data-system="3" onclick="switchSystem('3')">System 3-zmianowy (Brygady E–G)</div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="nav">
+    <button onclick="changeMonth(-1)">‹</button>
+    <div class="label" id="monthLabel"></div>
+    <button onclick="changeMonth(1)">›</button>
+  </div>
+  <div class="actions">
+    <button onclick="goToday()">Dziś</button>
+    <button onclick="printThreeMonths()">Drukuj (3 miesiące)</button>
+    <button class="gear" onclick="toggleSettings()">⚙ Ustawienia</button>
+  </div>
+</div>
+
+<div class="settings" id="settingsPanel">
+  <div class="settings-grid">
+    <div>
+      <label>Punkt odniesienia — system 4-zmianowy</label>
+      <input type="date" id="anchor4" onchange="onSettingsChange()">
+    </div>
+    <div>
+      <label>Punkt odniesienia — system 3-zmianowy (poniedziałek)</label>
+      <input type="date" id="anchor3" onchange="onSettingsChange()">
+    </div>
+    <div>
+      <label>Nazwa brygady A / E</label>
+      <input type="text" id="nameA" placeholder="np. brygada Jacka" onchange="onSettingsChange()">
+    </div>
+    <div>
+      <label>Nazwa brygady B / F</label>
+      <input type="text" id="nameB" placeholder="np. Moja brygada" onchange="onSettingsChange()">
+    </div>
+    <div>
+      <label>Nazwa brygady C / G</label>
+      <input type="text" id="nameC" placeholder="np. br. Justyny" onchange="onSettingsChange()">
+    </div>
+    <div id="nameDWrap">
+      <label>Nazwa brygady D</label>
+      <input type="text" id="nameD" placeholder="np. Kowalskiego" onchange="onSettingsChange()">
+    </div>
+    <div>
+      <label>Twoja brygada (podświetlenie kolumny)</label>
+      <input type="text" id="myBrigade" maxlength="1" placeholder="np. A" oninput="onSettingsChange()">
+    </div>
+  </div>
+  <div class="hint">
+    Punkt odniesienia to dzień, w którym brygada A / E rozpoczyna blok zmiany I (rano).
+    System 4-zmianowy: cykl 12-dniowy (3×I, W, 3×III, W, 3×II, W), każda kolejna brygada przesunięta o 3 dni.
+    System 3-zmianowy: praca tylko pon–pt, tygodniowa rotacja I → III → II, każda kolejna brygada przesunięta o tydzień, weekendy zawsze wolne.
+    Pole „Twoja brygada" — wpisz literę (A–D lub E–G), aby podświetlić tę kolumnę. Puste pole = brak podświetlenia.
+  </div>
+</div>
+
+<div class="legend">
+  <span>I zm. 7-15</span>
+  <span>II zm. 15-23</span>
+  <span>III zm 23-7</span>
+  <span><span class="swatch" style="background:var(--shift-W)"></span> W — wolne</span>
+</div>
+
+<div class="table-wrap" id="mainTableWrap">
+  <table>
+    <thead><tr id="headRow"></tr></thead>
+    <tbody id="bodyRows"></tbody>
+  </table>
+</div>
+
+<div id="printArea"></div>
+
+<footer>Wygenerowano automatycznie · zmień punkt odniesienia w Ustawieniach, jeśli rzeczywisty grafik się przesunął</footer>
+
+<script>
+/* ------------------------------------------------------------
+   STAŁE
+   ------------------------------------------------------------ */
+const MONTHS = ["styczeń","luty","marzec","kwiecień","maj","czerwiec","lipiec","sierpień","wrzesień","październik","listopad","grudzień"];
+const DAYS_SHORT = ["Nd","Pn","Wt","Śr","Cz","Pt","So"];
+
+/* ------------------------------------------------------------
+   STAN APLIKACJI (state)
+   ------------------------------------------------------------
+   Jedyne miejsce przechowujące dane aplikacji w pamięci.
+   system     — "4" albo "3", która zakładka jest aktywna
+   viewYear/viewMonth — który miesiąc jest aktualnie wyświetlany
+   anchor4    — data (RRRR-MM-DD), gdy brygada A zaczyna blok "I"
+                w systemie 4-zmianowym (patrz funkcja shift4)
+   anchor3    — poniedziałek, gdy brygada E zaczyna tydzień "I"
+                w systemie 3-zmianowym (patrz funkcja shift3)
+   names      — opcjonalne podpisy pod literami brygad (A–D)
+   myBrigade  — litera własnej brygady do podświetlenia kolumny
+                (puste = brak podświetlenia)
+   Zapisywane/wczytywane z localStorage przez saveSettings/loadSettings.
+   ------------------------------------------------------------ */
+let state = {
+  system: "4",
+  viewYear: new Date().getFullYear(),
+  viewMonth: new Date().getMonth(),
+  anchor4: "2026-08-11",
+  anchor3: "2026-08-03",
+  names: {A:"",B:"",C:"",D:""},
+  myBrigade: "",
+  selectedDays: new Set()  /* dni "kliknięte" do wyróżnienia — tylko w sesji, nie zapisywane na stałe */
+};
+
+/* ------------------------------------------------------------
+   TRWAŁOŚĆ USTAWIEŃ (localStorage)
+   loadSettings — wczytuje zapisany stan przy starcie i wpisuje
+                  wartości do pól formularza w panelu Ustawień.
+   saveSettings — zapisuje bieżący state do przeglądarki.
+   onSettingsChange — wywoływane przy każdej zmianie pola w
+                  Ustawieniach: aktualizuje state, zapisuje i
+                  przerysowuje tabelę (render()).
+   ------------------------------------------------------------ */
+function loadSettings(){
+  try{
+    const saved = JSON.parse(localStorage.getItem("grafikZmianySettings") || "{}");
+    Object.assign(state, saved);
+  }catch(e){}
+  document.getElementById("anchor4").value = state.anchor4;
+  document.getElementById("anchor3").value = state.anchor3;
+  document.getElementById("nameA").value = state.names.A || "";
+  document.getElementById("nameB").value = state.names.B || "";
+  document.getElementById("nameC").value = state.names.C || "";
+  document.getElementById("nameD").value = state.names.D || "";
+  document.getElementById("myBrigade").value = state.myBrigade || "";
+}
+
+function saveSettings(){
+  localStorage.setItem("grafikZmianySettings", JSON.stringify({
+    anchor4: state.anchor4, anchor3: state.anchor3, names: state.names, myBrigade: state.myBrigade
+  }));
+}
+
+function onSettingsChange(){
+  state.anchor4 = document.getElementById("anchor4").value || state.anchor4;
+  state.anchor3 = document.getElementById("anchor3").value || state.anchor3;
+  state.names.A = document.getElementById("nameA").value;
+  state.names.B = document.getElementById("nameB").value;
+  state.names.C = document.getElementById("nameC").value;
+  state.names.D = document.getElementById("nameD").value;
+  state.myBrigade = document.getElementById("myBrigade").value.trim().toUpperCase();
+  saveSettings();
+  render();
+}
+
+/* ------------------------------------------------------------
+   NAWIGACJA / UI
+   toggleSettings — pokazuje/ukrywa panel Ustawień.
+   switchSystem   — przełącza zakładkę 3-zmianowy / 4-zmianowy.
+   changeMonth    — przechodzi miesiąc wstecz/w przód (±1).
+   goToday        — wraca do bieżącego miesiąca.
+   ------------------------------------------------------------ */
+function toggleSettings(){
+  document.getElementById("settingsPanel").classList.toggle("open");
+}
+
+function switchSystem(sys){
+  state.system = sys;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.system===sys));
+  document.getElementById("nameDWrap").style.display = sys==="4" ? "block" : "none";
+  render();
+}
+
+function changeMonth(delta){
+  state.viewMonth += delta;
+  if(state.viewMonth < 0){ state.viewMonth = 11; state.viewYear--; }
+  if(state.viewMonth > 11){ state.viewMonth = 0; state.viewYear++; }
+  render();
+}
+
+function goToday(){
+  const t = new Date();
+  state.viewYear = t.getFullYear();
+  state.viewMonth = t.getMonth();
+  render();
+}
+
+/* ------------------------------------------------------------
+   FUNKCJE POMOCNICZE DAT
+   dateOnly     — obcina godzinę/minuty z obiektu Date (do
+                  porównywania samych dni).
+   daysBetween  — liczba dni między dwiema datami (a → b).
+   mod          — modulo, które zawsze zwraca liczbę dodatnią
+                  (JS "%" tego nie robi dla liczb ujemnych, a jest
+                  to potrzebne przy liczeniu cykli zmian).
+   ------------------------------------------------------------ */
+function dateOnly(d){
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+function daysBetween(a,b){
+  return Math.round((dateOnly(b) - dateOnly(a)) / 86400000);
+}
+
+function mod(n,m){
+  return ((n % m) + m) % m;
+}
+
+/* ------------------------------------------------------------
+   RDZEŃ LOGIKI — WYLICZANIE ZMIANY DLA DANEGO DNIA I BRYGADY
+   To jest miejsce, w którym zmieniałoby się REGUŁY grafiku,
+   jeśli kiedyś ulegną zmianie w zakładzie.
+
+   shift4(date, brigadeIndex) — system 4-zmianowy (brygady A–D,
+     indeks 0–3). Cykl 12-dniowy liczony od anchor4:
+     pozycje 0-2 = I, 3 = W, 4-6 = III, 7 = W, 8-10 = II, 11 = W.
+     Każda kolejna brygada (B, C, D) ma cykl przesunięty o 3 dni
+     względem poprzedniej (stąd "brigadeIndex*3").
+
+   shift3(date, brigadeIndex) — system 3-zmianowy (brygady E–G,
+     indeks 0–2). Weekendy zawsze W. W tygodniu roboczym rotacja
+     co tydzień: I → III → II, licząc tygodnie od poniedziałku
+     anchor3. Każda kolejna brygada przesunięta o 1 tydzień.
+   ------------------------------------------------------------ */
+function shift4(date, brigadeIndex){
+  const anchor = new Date(state.anchor4);
+  const diff = daysBetween(anchor, date) - brigadeIndex*3;
+  const pos = mod(diff, 12);
+  if(pos <= 2) return "I";
+  if(pos === 3) return "W";
+  if(pos <= 6) return "III";
+  if(pos === 7) return "W";
+  if(pos <= 10) return "II";
+  return "W";
+}
+
+function shift3(date, brigadeIndex){
+  const dow = date.getDay();
+  if(dow===0 || dow===6) return "W";
+  const anchorMon = new Date(state.anchor3);
+  const diffDays = daysBetween(anchorMon, date);
+  const weekIndex = Math.floor(diffDays/7);
+  const pos = mod(weekIndex - brigadeIndex, 3);
+  return pos===0 ? "I" : pos===1 ? "III" : "II";
+}
+
+/* ------------------------------------------------------------
+   BUDOWANIE ZNACZNIKÓW TABELI (HTML jako tekst)
+   Używane zarówno przez render() (widok na ekranie — jedna
+   tabela, id="headRow"/"bodyRows"), jak i przez
+   printThreeMonths() (trzy niezależne tabele obok siebie na
+   wydruku). Dzięki temu logika budowania wiersza/nagłówka jest
+   w jednym miejscu.
+
+   buildHeadHTML(system) — nagłówek tabeli: kolumna "Data" +
+     litery brygad (+ opcjonalny podpis z Ustawień). Dodaje klasę
+     "mine" do brygady ustawionej w polu "Twoja brygada".
+
+   buildBodyHTML(year, month, system) — wszystkie wiersze dni
+     danego miesiąca: data, dzień tygodnia, kolor weekendu/"dziś",
+     oraz komórka zmiany (I/II/III/W) dla każdej brygady.
+   ------------------------------------------------------------ */
+function buildHeadHTML(system){
+  const brigades = system==="4" ? ["A","B","C","D"] : ["E","F","G"];
+  const nameKeys = system==="4" ? ["A","B","C","D"] : ["A","B","C"];
+  return "<th class='date-col'>Data</th>" + brigades.map((b,i)=>{
+    const nm = state.names[nameKeys[i]];
+    const mineClass = (state.myBrigade && b===state.myBrigade) ? " mine" : "";
+    return `<th class="${mineClass.trim()}">${b}${nm ? `<span class="brigade-name">${nm}</span>` : ""}</th>`;
+  }).join("");
+}
+
+function dateKey(date){
+  return date.getFullYear() + "-" + String(date.getMonth()+1).padStart(2,"0") + "-" + String(date.getDate()).padStart(2,"0");
+}
+
+function buildBodyHTML(year, month, system){
+  const brigades = system==="4" ? ["A","B","C","D"] : ["E","F","G"];
+  const daysInMonth = new Date(year, month+1, 0).getDate();
+  const today = dateOnly(new Date());
+  let html = "";
+
+  for(let d=1; d<=daysInMonth; d++){
+    const date = new Date(year, month, d);
+    const dow = date.getDay();
+    const isWeekend = (dow===0 || dow===6);
+    const isToday = daysBetween(date, today)===0;
+    const key = dateKey(date);
+    const isSelected = state.selectedDays.has(key);
+    const rowClass = (isWeekend?"weekend ":"") + (isToday?"today ":"") + (isSelected?"selected":"");
+
+    let row = `<tr class="${rowClass}" data-date="${key}"><td class="date-col">${String(d).padStart(2,"0")} ${DAYS_SHORT[dow]}</td>`;
+    brigades.forEach((b,i)=>{
+      const val = system==="4" ? shift4(date,i) : shift3(date,i);
+      const mineClass = (state.myBrigade && b===state.myBrigade) ? " mine" : "";
+      row += `<td class="shift ${val}${mineClass}">${val}</td>`;
+    });
+    row += "</tr>";
+    html += row;
+  }
+  return html;
+}
+
+/* ------------------------------------------------------------
+   RENDEROWANIE WIDOKU NA EKRANIE
+   render() — przerysowuje etykietę miesiąca oraz tabelę główną
+   (#headRow/#bodyRows) na podstawie bieżącego state. Wywoływane
+   po każdej zmianie: miesiąca, systemu, ustawień.
+   ------------------------------------------------------------ */
+function render(){
+  const year = state.viewYear, month = state.viewMonth;
+  document.getElementById("monthLabel").textContent = MONTHS[month] + " " + year;
+  document.getElementById("headRow").innerHTML = buildHeadHTML(state.system);
+  document.getElementById("bodyRows").innerHTML = buildBodyHTML(year, month, state.system);
+}
+
+/* ------------------------------------------------------------
+   DRUKOWANIE 3 MIESIĘCY NA JEDNEJ STRONIE
+   printThreeMonths() — generuje 3 niezależne tabele (bieżący
+   miesiąc + 2 kolejne, dla aktualnie aktywnego systemu) i
+   wstawia je do ukrytego #printArea, który staje się widoczny
+   TYLKO w trybie druku (reguła "@media print" w <style>, sekcja
+   #printArea ustawia display:flex — trzy kolumny obok siebie).
+   Po wypełnieniu wywołuje window.print().
+   ------------------------------------------------------------ */
+function printThreeMonths(){
+  const printArea = document.getElementById("printArea");
+  let html = "";
+  for(let i=0; i<3; i++){
+    let y = state.viewYear, m = state.viewMonth + i;
+    while(m > 11){ m -= 12; y++; }
+    const label = state.system==="4" ? "System 4-zmianowy (A–D)" : "System 3-zmianowy (E–G)";
+    html += `<div class="print-month">
+      <h2>${MONTHS[m]} ${y} — ${label}</h2>
+      <table>
+        <thead><tr>${buildHeadHTML(state.system)}</tr></thead>
+        <tbody>${buildBodyHTML(y, m, state.system)}</tbody>
+      </table>
+    </div>`;
+  }
+  printArea.innerHTML = html;
+  window.print();
+}
+
+/* ------------------------------------------------------------
+   ZAZNACZANIE DNIA KLIKNIĘCIEM
+   Kliknięcie w dowolne miejsce wiersza przełącza wyróżnienie
+   tego dnia (klasa "selected", żółte tło w CSS). Obsługa przez
+   delegację zdarzeń na #bodyRows — działa też po każdym
+   przerysowaniu tabeli, bo nasłuch wisi na stałym elemencie
+   nadrzędnym, a nie na poszczególnych wierszach. Zaznaczenia
+   trzymane są w state.selectedDays (klucz "RRRR-MM-DD") i
+   nie są zapisywane na stałe — znikają po odświeżeniu strony.
+   ------------------------------------------------------------ */
+function setupRowSelection(){
+  document.getElementById("bodyRows").addEventListener("click", (e) => {
+    const row = e.target.closest("tr[data-date]");
+    if(!row) return;
+    const key = row.dataset.date;
+    if(state.selectedDays.has(key)){
+      state.selectedDays.delete(key);
+    }else{
+      state.selectedDays.add(key);
+    }
+    row.classList.toggle("selected");
+  });
+}
+
+/* ------------------------------------------------------------
+   START APLIKACJI
+   Wczytaj zapisane ustawienia, narysuj tabelę, i zarejestruj
+   service worker (sw.js) odpowiedzialny za działanie offline —
+   patrz osobny plik sw.js oraz manifest.json (ikony/nazwa PWA).
+   ------------------------------------------------------------ */
+loadSettings();
+render();
+setupRowSelection();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
