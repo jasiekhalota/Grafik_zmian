@@ -40,7 +40,7 @@
   :root{
     --navy:#12263a;
     --navy-2:#1c3a56;
-    --paper:#f5f7f9;
+    --paper:#6fa8cf;
     --line:#d3dbe1;         /* linie UI (paski, legenda) */
     --line-day:#000000;     /* linie poziome między dniami w tabeli */
     --line-strong:#5c6b76;  /* linie pionowe / separatory */
@@ -277,7 +277,7 @@
   footer{
     text-align:center;
     font-size:.7rem;
-    color:var(--muted);
+    color:#0d2b40;
     padding:8px 14px 22px;
   }
 
@@ -330,10 +330,20 @@
   <div class="actions">
     <button onclick="goToday()">Dziś</button>
     <button onclick="printThreeMonths()">Drukuj (3 miesiące)</button>
+    <button id="installBtn" onclick="installApp()" style="display:none;">⬇ Zainstaluj aplikację</button>
+    <button id="iosHintBtn" onclick="toggleIosHint()" style="display:none;">📲 Jak zainstalować na iPhone</button>
     <button class="gear" onclick="toggleSettings()">⚙ Ustawienia</button>
   </div>
 </div>
 
+<div class="settings" id="iosHintPanel">
+  <div class="hint" style="max-width:600px;">
+    Na iPhone/iPadzie (Safari) nie da się zainstalować strony przyciskiem — Apple na to nie pozwala.
+    Zrób to ręcznie: stuknij ikonę <strong>Udostępnij</strong> (kwadrat ze strzałką w górę, na dolnym pasku Safari),
+    przewiń listę i wybierz <strong>„Dodaj do ekranu początkowego"</strong>. Aplikacja pojawi się jako zwykła ikona,
+    otwierana bez paska adresu.
+  </div>
+</div>
 <div class="settings" id="settingsPanel">
   <div class="settings-grid">
     <div>
@@ -652,6 +662,59 @@ function printThreeMonths(){
   }
   printArea.innerHTML = html;
   window.print();
+}
+
+/* ------------------------------------------------------------
+   INSTALACJA APLIKACJI (PWA)
+   Android/Chrome/Edge (Windows) — przeglądarka sama zgłasza
+   zdarzenie "beforeinstallprompt", gdy strona spełnia kryteria
+   instalowalności (manifest.json + zarejestrowany service
+   worker + HTTPS). Domyślnie przeglądarka pokazuje własny,
+   dyskretny baner — tu go blokujemy (preventDefault) i zamiast
+   tego pokazujemy WŁASNY przycisk "Zainstaluj aplikację",
+   który wywołuje to samo okienko na żądanie użytkownika.
+
+   iOS/Safari — Apple NIE udostępnia zdarzenia
+   "beforeinstallprompt" i nie pozwala żadnej stronie wywołać
+   instalacji programowo. Jedyna droga to ręczne dodanie przez
+   Udostępnij → "Dodaj do ekranu początkowego". Dlatego na
+   iOS pokazujemy zamiast przycisku instalacji — przycisk
+   z instrukcją (toggleIosHint).
+   ------------------------------------------------------------ */
+let deferredInstallPrompt = null;
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  document.getElementById("installBtn").style.display = "inline-block";
+});
+
+async function installApp(){
+  if(!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  document.getElementById("installBtn").style.display = "none";
+}
+
+window.addEventListener("appinstalled", () => {
+  document.getElementById("installBtn").style.display = "none";
+});
+
+function isIOS(){
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) && !window.MSStream;
+}
+
+function isStandalone(){
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function toggleIosHint(){
+  document.getElementById("iosHintPanel").classList.toggle("open");
+}
+
+if(isIOS() && !isStandalone()){
+  document.getElementById("iosHintBtn").style.display = "inline-block";
 }
 
 /* ------------------------------------------------------------
