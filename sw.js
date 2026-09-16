@@ -1,4 +1,4 @@
-const CACHE_NAME = "grafik-zmian-v1";
+const CACHE_NAME = "grafik-zmian-v2";
 const ASSETS = [
   "./",
   "./index.html",

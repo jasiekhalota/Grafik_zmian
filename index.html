@@ -47,12 +47,12 @@
     --ink:#1b2833;
     --muted:#6b7a87;
     --shift-W:#4caf6e;
-    --shift-W-bg:#dff5e5;
+    --shift-W-bg:#a8e6b8;
     --today:#c0392b;
     --highlight:#0a84ff;    /* kolor podświetlenia własnej brygady */
     --today-bg:#f8d7d3;
     --selected-bg:#ffe08a;  /* kolor wyróżnienia dnia po kliknięciu */
-    --weekend-bg:#eef1f3;
+    --weekend-bg:#cdd7dd;
   }
   *{box-sizing:border-box;}
   body{
@@ -236,7 +236,7 @@
     padding:7px 3px;
   }
   th.date-col, td.date-col{
-    border-right:2.5px solid var(--navy);
+    border-right:2px solid var(--line-strong);
   }
   th.date-col{text-align:left;padding-left:8px;width:82px;font-size:.88rem;}
   tbody td.date-col{
@@ -247,10 +247,10 @@
     white-space:nowrap;
     font-size:.82rem;
   }
-  tbody tr.weekend td.date-col{color:#b23a3a;}
+  tbody tr.weekend td.date-col{color:#d32f2f;font-weight:700;}
   tbody tr.weekend{background:var(--weekend-bg);}
   tbody tr.today td.date-col{font-weight:700;}
-  tbody tr.today td{background:var(--today-bg);}
+  tbody tr.today td{background:var(--today-bg);box-shadow:inset 0 0 0 1.5px var(--today);}
   td.shift{font-weight:700;color:#000;}
   td.I, td.II, td.III{background:#fff;}
   td.W{background:var(--shift-W-bg);}
@@ -387,7 +387,9 @@
   <span>I zm. 7-15</span>
   <span>II zm. 15-23</span>
   <span>III zm 23-7</span>
-  <span><span class="swatch" style="background:var(--shift-W)"></span> W — wolne</span>
+  <span><span class="swatch" style="background:var(--shift-W-bg)"></span> W — wolne</span>
+  <span><span class="swatch" style="background:var(--today-bg)"></span> dzień dzisiejszy</span>
+  <span><span class="swatch" style="background:var(--selected-bg)"></span> dzień zaznaczony</span>
 </div>
 
 <div class="table-wrap" id="mainTableWrap">
