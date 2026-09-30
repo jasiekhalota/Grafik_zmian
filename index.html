@@ -386,17 +386,17 @@
     </div>
   </div>
   <div class="hint">
-    Punkt odniesienia to dzień, w którym brygada A / E rozpoczyna blok zmiany I (rano).
-    System 4-zmianowy: cykl 12-dniowy (3×I, W, 3×III, W, 3×II, W), każda kolejna brygada przesunięta o 3 dni.
-    System 3-zmianowy: praca tylko pon–pt, tygodniowa rotacja I → III → II, każda kolejna brygada przesunięta o tydzień, weekendy zawsze wolne.
+    Punkt odniesienia to dzień, w którym brygada A / E rozpoczyna blok zmiany 1 (rano).
+    System 4-zmianowy: cykl 12-dniowy (3×1, W, 3×3, W, 3×2, W), każda kolejna brygada przesunięta o 3 dni.
+    System 3-zmianowy: praca tylko pon–pt, tygodniowa rotacja 1 → 3 → 2, każda kolejna brygada przesunięta o tydzień, weekendy zawsze wolne.
     Pole „Twoja brygada" — wpisz literę (A–D lub E–G), aby podświetlić tę kolumnę. Puste pole = brak podświetlenia.
   </div>
 </div>
 
 <div class="legend">
-  <span>I zm. 7-15</span>
-  <span>II zm. 15-23</span>
-  <span>III zm 23-7</span>
+  <span>1 zm. 7-15</span>
+  <span>2 zm. 15-23</span>
+  <span>3 zm 23-7</span>
   <span><span class="swatch" style="background:var(--shift-W-bg)"></span> W — wolne</span>
   <span><span class="swatch" style="background:var(--today-bg)"></span> dzień dzisiejszy</span>
   <span><span class="swatch" style="background:var(--selected-bg)"></span> dzień zaznaczony</span>
@@ -608,6 +608,11 @@ function dateKey(date){
   return date.getFullYear() + "-" + String(date.getMonth()+1).padStart(2,"0") + "-" + String(date.getDate()).padStart(2,"0");
 }
 
+/* Etykiety wyświetlane w komórkach — kod wewnętrzny (I/II/III/W,
+   używany też jako nazwa klasy CSS do kolorowania) pozostaje bez
+   zmian, tylko to, co widzi użytkownik, jest teraz cyfrą arabską. */
+const SHIFT_LABEL = { I:"1", II:"2", III:"3", W:"W" };
+
 function buildBodyHTML(year, month, system){
   const brigades = system==="4" ? ["A","B","C","D"] : ["E","F","G"];
   const daysInMonth = new Date(year, month+1, 0).getDate();
@@ -627,7 +632,7 @@ function buildBodyHTML(year, month, system){
     brigades.forEach((b,i)=>{
       const val = system==="4" ? shift4(date,i) : shift3(date,i);
       const mineClass = (state.myBrigade && b===state.myBrigade) ? " mine" : "";
-      row += `<td class="shift ${val}${mineClass}">${val}</td>`;
+      row += `<td class="shift ${val}${mineClass}">${SHIFT_LABEL[val]}</td>`;
     });
     row += "</tr>";
     html += row;
